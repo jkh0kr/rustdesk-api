@@ -11,16 +11,8 @@ on:
         description: 'Docker Hub 이미지 네임스페이스(기본값: Github 사용자 이름)'
         required: false
         default: ''
-      GHCR_IMAGE_NAMESPACE:
-        description: 'GitHub 컨테이너 레지스트리 이미지 네임스페이스(기본값: Github 사용자 이름)'
-        required: false
-        default: ''
       SKIP_DOCKER_HUB:
         description: 'Docker Hub에 푸시를 건너뛰려면 true로 설정(기본값: false)'
-        required: false
-        default: 'false'
-      SKIP_GHCR:
-        description: 'GHCR로 푸시를 건너뛰려면 true로 설정(기본값: false)'
         required: false
         default: 'false'
       WEBCLIENT_SOURCE_LOCATION:
@@ -37,9 +29,7 @@ env:
   WEBCLIENT_SOURCE_LOCATION: ${{ github.event.inputs.WEBCLIENT_SOURCE_LOCATION || 'https://github.com/jkh0kr/rustdesk-api-web' }}
   BASE_IMAGE_NAMESPACE: ${{ github.event.inputs.BASE_IMAGE_NAMESPACE || github.actor }}
   DOCKERHUB_IMAGE_NAMESPACE: ${{ github.event.inputs.DOCKERHUB_IMAGE_NAMESPACE || github.actor }}
-  GHCR_IMAGE_NAMESPACE: ${{ github.event.inputs.GHCR_IMAGE_NAMESPACE || github.actor }}
   SKIP_DOCKER_HUB: ${{ github.event.inputs.SKIP_DOCKER_HUB || 'false' }}
-  SKIP_GHCR: ${{ github.event.inputs.SKIP_GHCR || 'false' }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -158,14 +148,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-      - name: Log in to GitHub Container Registry
-        if: ${{ env.SKIP_GHCR == 'false' }}  # Only log in if GHCR push is enabled
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
-
       - name: Extract version from tag
         id: vars
         run: |
@@ -209,22 +191,6 @@ jobs:
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-${{ matrix.job.platform }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Build and push Docker image to GHCR ${{ matrix.job.platform }}
-        if: ${{ env.SKIP_GHCR == 'false' }}  # Only run this step if SKIP_GHCR is false
-        uses: docker/build-push-action@v5
-        with:
-          context: "."
-          file: ./Dockerfile
-          platforms: ${{ matrix.job.docker_platform }}
-          push: true
-          provenance: false
-          build-args: |
-            BUILDARCH=${{ matrix.job.platform }}
-          tags: |
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.LATEST_TAG }}-${{ matrix.job.platform }},
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-${{ matrix.job.platform }}
-          labels: ${{ steps.meta.outputs.labels }}
-
   #
   docker-manifest:
     name: Push Docker Manifest
@@ -247,14 +213,6 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESS_TOKEN }}
 
-      - name: Log in to GitHub Container Registry
-        if: ${{ env.SKIP_GHCR == 'false' }}  # Only log in if GHCR push is enabled
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
-
       - name: Create and push manifest Docker Hub (:version)
         if: ${{ env.SKIP_DOCKER_HUB == 'false' }}
         uses: Noelware/docker-manifest-action@master
@@ -264,17 +222,6 @@ jobs:
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-armv7l,
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-arm64
           push: true
-
-      - name: Create and push manifest GHCR (:version)
-        if: ${{ env.SKIP_GHCR == 'false' }}
-        uses: Noelware/docker-manifest-action@master
-        with:
-          base-image: ghcr.io/${{ env.BASE_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}
-          extra-images: ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-amd64,
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-armv7l,
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:${{ env.TAG }}-arm64
-          push: true
-          amend: true
 
       - name: Create and push manifest Docker Hub (:latest)
         if: ${{ env.SKIP_DOCKER_HUB == 'false' }}
@@ -286,13 +233,3 @@ jobs:
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:latest-arm64
           push: true
 
-      - name: Create and push manifest GHCR (:latest)
-        if: ${{ env.SKIP_GHCR == 'false' }}
-        uses: Noelware/docker-manifest-action@master
-        with:
-          base-image: ghcr.io/${{ env.BASE_IMAGE_NAMESPACE }}/rustdesk-api:latest
-          extra-images: ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:latest-amd64,
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:latest-armv7l,
-            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:latest-arm64
-          push: true
-          amend: true
