@@ -41,7 +41,7 @@ func ApiInitValidator() {
 	}
 
 	//validate没有ko的翻译，使用zh的翻译
-	err = zh_translations.RegisterDefaultTranslations(validate, koTrans)
+	err = en_translations.RegisterDefaultTranslations(validate, koTrans)
 	if err != nil {
 		panic(err)
 	}
